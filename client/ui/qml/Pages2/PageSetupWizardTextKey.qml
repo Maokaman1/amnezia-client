@@ -13,6 +13,17 @@ import "../Config"
 PageType {
     id: root
 
+    function openImportedConfig() {
+        if (ImportController.isFreeApiConfig() && !SubscriptionUiController.hasPurchasedKey()) {
+            if (SubscriptionUiController.startFreeAccountLoginForKey(ImportController.importedConfig())) {
+                PageController.goToPage(PageEnum.PageSetupWizardApiFreeEmail)
+            }
+            return
+        }
+        PageController.goToPage(PageEnum.PageSetupWizardViewConfig)
+    }
+
+
     FlickableType {
         id: flickable
 
@@ -73,7 +84,7 @@ PageType {
 
             onClicked: {
                 if (ImportController.extractConfigFromData(textKey.textField.text)) {
-                    PageController.goToPage(PageEnum.PageSetupWizardViewConfig)
+                    root.openImportedConfig()
                 }
             }
         }

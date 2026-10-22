@@ -38,6 +38,8 @@ public:
         QString accessToken;
         QString captchaId;
         QString captchaSolution;
+        QJsonObject authData;
+        QString vpnKey;
     };
 
     explicit SubscriptionController(SecureServersRepository* serversRepository,
@@ -118,7 +120,7 @@ private:
                                         const ProtocolData &protocolData, const QByteArray &responseBody);
     ErrorCode applyImportedServiceConfig(const QString &userCountryCode, const QString &serviceType,
                                          const QString &serviceProtocol, const ProtocolData &protocolData,
-                                         const QByteArray &responseBody);
+                                         const QByteArray &responseBody, const QString &vpnKey = QString());
     void markSubscriptionExpiredByServer(const QString &serverId, const ApiV2ServerConfig &apiV2);
     void updateApiConfigInJson(QJsonObject &serverConfigJson, const QString &serviceType,
                                 const QString &serviceProtocol, const QString &userCountryCode,

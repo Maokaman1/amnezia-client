@@ -1,3 +1,4 @@
+#include "core/models/api/apiV2ServerConfig.h"
 #include "subscriptionUiController.h"
 
 #include "amneziaApplication.h"
@@ -658,16 +659,44 @@ bool SubscriptionUiController::hasPurchasedKey()
 bool SubscriptionUiController::startFreeAccountLogin()
 {
     m_freeAccount = FreeAccountState{};
+    m_freeAccount.userCountryCode = m_apiServicesModel->getCountryCode();
+    m_freeAccount.serviceType = m_apiServicesModel->getSelectedServiceType();
+    m_freeAccount.serviceProtocol = m_apiServicesModel->getSelectedServiceProtocol();
+    m_freeAccount.serviceName = m_apiServicesModel->getSelectedServiceName();
+    return beginFreeAccountLogin();
+}
 
-    if (m_serversController->isServerFromApiAlreadyExists(m_apiServicesModel->getCountryCode(),
-                                                          m_apiServicesModel->getSelectedServiceType(),
-                                                          m_apiServicesModel->getSelectedServiceProtocol())) {
+bool SubscriptionUiController::startFreeAccountLoginForKey(const QJsonObject &keyConfig)
+{
+    m_freeAccount = FreeAccountState{};
+
+    const ApiV2ServerConfig keyServer = ApiV2ServerConfig::fromJson(keyConfig);
+    const QJsonObject authData = keyServer.authData.toJson();
+    if (!keyServer.isFree() || authData.isEmpty() || keyServer.apiConfig.serviceProtocol.isEmpty()) {
+        emit errorOccurred(ErrorCode::ImportInvalidConfigError);
+        emit freeAccountLoginFailed(QString(), 0);
+        return false;
+    }
+
+    m_freeAccount.userCountryCode = keyServer.apiConfig.userCountryCode;
+    m_freeAccount.serviceType = keyServer.apiConfig.serviceType;
+    m_freeAccount.serviceProtocol = keyServer.apiConfig.serviceProtocol;
+    m_freeAccount.serviceName = keyServer.name.isEmpty() ? QStringLiteral("Amnezia Free") : keyServer.name;
+    m_freeAccount.authData = authData;
+    m_freeAccount.vpnKey = keyServer.apiConfig.vpnKey;
+    return beginFreeAccountLogin();
+}
+
+bool SubscriptionUiController::beginFreeAccountLogin()
+{
+    if (m_serversController->isServerFromApiAlreadyExists(m_freeAccount.userCountryCode, m_freeAccount.serviceType,
+                                                          m_freeAccount.serviceProtocol)) {
         emit errorOccurred(ErrorCode::ApiConfigAlreadyAdded);
         emit freeAccountLoginFailed(QString(), 0);
         return false;
     }
 
-    m_freeAccount.protocolData = SubscriptionController::generateProtocolData(m_apiServicesModel->getSelectedServiceProtocol());
+    m_freeAccount.protocolData = SubscriptionController::generateProtocolData(m_freeAccount.serviceProtocol);
     return true;
 }
 
@@ -726,7 +755,7 @@ bool SubscriptionUiController::sendFreeEmailCode(bool refreshCaptcha)
 
     AccountController::EmailCodeRequest request;
     request.email = m_freeAccount.email;
-    request.userCountryCode = m_apiServicesModel->getCountryCode();
+    request.userCountryCode = m_freeAccount.userCountryCode;
     request.idempotencyKey = newIdempotencyKey();
     request.captchaId = m_freeAccount.captchaId;
     request.captchaSolution = refreshCaptcha ? QString() : m_freeAccount.captchaSolution;
@@ -808,11 +837,13 @@ bool SubscriptionUiController::importFreeAccountConfig()
     accountData.accessToken = m_freeAccount.session.accessToken;
     accountData.captchaId = m_freeAccount.captchaId;
     accountData.captchaSolution = m_freeAccount.captchaSolution;
+    accountData.authData = m_freeAccount.authData;
+    accountData.vpnKey = m_freeAccount.vpnKey;
 
     SubscriptionController::CaptchaInfo retryCaptcha;
-    const ErrorCode importError = m_subscriptionController->importFreeAccountFromGateway(m_apiServicesModel->getCountryCode(),
-                                                                                         m_apiServicesModel->getSelectedServiceType(),
-                                                                                         m_apiServicesModel->getSelectedServiceProtocol(),
+    const ErrorCode importError = m_subscriptionController->importFreeAccountFromGateway(m_freeAccount.userCountryCode,
+                                                                                         m_freeAccount.serviceType,
+                                                                                         m_freeAccount.serviceProtocol,
                                                                                          accountData, &retryCaptcha);
     if (importError != ErrorCode::NoError) {
         qWarning().noquote() << "[FreeAccount] Config import failed, errorCode =" << static_cast<int>(importError);
@@ -840,9 +871,10 @@ bool SubscriptionUiController::importFreeAccountConfig()
         m_apiAccountInfoModel->updateModel(accountInfo, apiV2->toJson());
     }
 
+    const QString serviceName = m_freeAccount.serviceName;
     m_freeAccount = FreeAccountState{};
     emit freeAccountLoginFinished();
-    emit installServerFromApiFinished(tr("%1 installed successfully.").arg(m_apiServicesModel->getSelectedServiceName()));
+    emit installServerFromApiFinished(tr("%1 installed successfully.").arg(serviceName));
     return true;
 }
 

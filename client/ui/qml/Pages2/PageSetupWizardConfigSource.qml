@@ -16,6 +16,17 @@ import "../Config"
 PageType {
     id: root
 
+    function openImportedConfig() {
+        if (ImportController.isFreeApiConfig() && !SubscriptionUiController.hasPurchasedKey()) {
+            if (SubscriptionUiController.startFreeAccountLoginForKey(ImportController.importedConfig())) {
+                PageController.goToPage(PageEnum.PageSetupWizardApiFreeEmail)
+            }
+            return
+        }
+        PageController.goToPage(PageEnum.PageSetupWizardViewConfig)
+    }
+
+
     property bool isRestoringBackup: false
 
     Connections {
@@ -204,7 +215,7 @@ PageType {
 
                     onClicked: {
                         if (ImportController.extractConfigFromData(textKey.textField.text)) {
-                            PageController.goToPage(PageEnum.PageSetupWizardViewConfig)
+                            root.openImportedConfig()
                         }
                     }
                 }
@@ -350,7 +361,7 @@ PageType {
             var fileName = SystemController.getFileName(qsTr("Open config file"), nameFilter)
             if (fileName !== "") {
                 if (ImportController.extractConfigFromFile(fileName)) {
-                    PageController.goToPage(PageEnum.PageSetupWizardViewConfig)
+                    root.openImportedConfig()
                 }
             }
         }

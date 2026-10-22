@@ -230,7 +230,7 @@ ErrorCode SubscriptionController::importServiceFromGateway(const QString &userCo
 
 ErrorCode SubscriptionController::applyImportedServiceConfig(const QString &userCountryCode, const QString &serviceType,
                                                              const QString &serviceProtocol, const ProtocolData &protocolData,
-                                                             const QByteArray &responseBody)
+                                                             const QByteArray &responseBody, const QString &vpnKey)
 {
     QJsonObject serverConfigJson;
     ErrorCode errorCode = extractServerConfigJsonFromResponse(responseBody, serviceProtocol, protocolData, serverConfigJson);
@@ -248,6 +248,9 @@ ErrorCode SubscriptionController::applyImportedServiceConfig(const QString &user
     }
 
     ApiV2ServerConfig apiV2ServerConfig = ApiV2ServerConfig::fromJson(serverConfigJson);
+    if (!vpnKey.isEmpty()) {
+        apiV2ServerConfig.apiConfig.vpnKey = vpnKey;
+    }
     m_serversRepository->addServer(QString(), apiV2ServerConfig.toJson(),
                                    serverConfigUtils::configTypeFromJson(apiV2ServerConfig.toJson()));
     return ErrorCode::NoError;
@@ -316,16 +319,19 @@ ErrorCode SubscriptionController::importFreeAccountFromGateway(const QString &us
         return ErrorCode::ApiAccountSessionError;
     }
 
-    QJsonObject apiPayload = GatewayPayloadBuilder(m_appSettingsRepository)
-                                     .addField(apiDefs::key::userCountryCode, userCountryCode)
-                                     .addField(apiDefs::key::serviceType, serviceType)
-                                     .addField(apiDefs::key::serviceProtocol, serviceProtocol)
-                                     .addField(apiDefs::key::publicKey, publicKeyForProtocol(serviceProtocol, accountData.protocolData))
-                                     .addField(apiDefs::key::userId, accountData.userId)
-                                     .addField(apiDefs::key::accessToken, accountData.accessToken)
-                                     .addField(apiDefs::key::captchaId, accountData.captchaId)
-                                     .addField(apiDefs::key::captchaSolution, normalizeCaptchaSolution(accountData.captchaSolution))
-                                     .build();
+    GatewayPayloadBuilder builder(m_appSettingsRepository);
+    builder.addField(apiDefs::key::userCountryCode, userCountryCode)
+            .addField(apiDefs::key::serviceType, serviceType)
+            .addField(apiDefs::key::serviceProtocol, serviceProtocol)
+            .addField(apiDefs::key::publicKey, publicKeyForProtocol(serviceProtocol, accountData.protocolData))
+            .addField(apiDefs::key::userId, accountData.userId)
+            .addField(apiDefs::key::accessToken, accountData.accessToken)
+            .addField(apiDefs::key::captchaId, accountData.captchaId)
+            .addField(apiDefs::key::captchaSolution, normalizeCaptchaSolution(accountData.captchaSolution));
+    if (!accountData.authData.isEmpty()) {
+        builder.addField(apiDefs::key::authData, accountData.authData);
+    }
+    const QJsonObject apiPayload = builder.build();
 
     QByteArray responseBody;
     ErrorCode errorCode = executeRequest(QString("%1v1/config"), apiPayload, responseBody);
@@ -342,7 +348,8 @@ ErrorCode SubscriptionController::importFreeAccountFromGateway(const QString &us
         return errorCode;
     }
 
-    return applyImportedServiceConfig(userCountryCode, serviceType, serviceProtocol, accountData.protocolData, responseBody);
+    return applyImportedServiceConfig(userCountryCode, serviceType, serviceProtocol, accountData.protocolData, responseBody,
+                                      accountData.vpnKey);
 }
 
 ErrorCode SubscriptionController::updateServiceFromGateway(const QString &serverId, const QString &newCountryCode, bool isConnectEvent,

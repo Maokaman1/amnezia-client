@@ -27,6 +27,8 @@ public slots:
     QString getConfigFileName();
     QString getMaliciousWarningText();
     bool isNativeWireGuardConfig();
+    bool isFreeApiConfig() const;
+    QJsonObject importedConfig() const;
     void processNativeWireGuardConfig();
     QString readTextFile(const QString &fileName);
 
